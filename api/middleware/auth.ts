@@ -6,6 +6,7 @@ import { users, usersByUsername, usersByEmail, persistAll } from '../store/index
 
 export interface AuthenticatedRequest extends Request {
   user?: JwtPayload
+  file?: Express.Multer.File
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'meldchart-dev-secret-change-in-production'

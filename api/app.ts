@@ -17,7 +17,7 @@ import adminRoutes from './routes/admin.js'
 import chartRoutes from './routes/charts.js'
 import uploadRoutes from './routes/upload.js'
 import exportRoutes from './routes/export.js'
-import { assets, announcements, maintenance } from './store/index.js'
+import { assets, announcements, maintenance, DATA_DIR } from './store/index.js'
 import { seedAdminUser } from './middleware/auth.js'
 import jwt from 'jsonwebtoken'
 import type { JwtPayload } from '../shared/types.js'
@@ -127,10 +127,14 @@ app.get('/api/assets/:id', (req: Request, res: Response): void => {
     res.status(404).json({ success: false, error: 'Asset not found' })
     return
   }
-  const base64 = asset.dataUrl.split(',')[1] || asset.dataUrl
-  const buffer = Buffer.from(base64, 'base64')
+  const filePath = path.join(DATA_DIR, asset.filePath)
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ success: false, error: 'Asset file not found' })
+    return
+  }
   res.setHeader('Content-Type', asset.mimeType)
-  res.send(buffer)
+  const stream = fs.createReadStream(filePath)
+  stream.pipe(res)
 })
 
 /**

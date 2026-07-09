@@ -10,7 +10,7 @@ import type { User, InviteCode, VerificationSession, ChartData, UploadedAsset, A
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data')
+export const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data')
 
 console.log('[Data] DATA_DIR =', DATA_DIR)
 

@@ -356,19 +356,58 @@ export interface UploadResponse {
 }
 
 export const uploadApi = {
-  audio: (name: string, dataUrl: string): Promise<UploadResponse> =>
-    request<UploadResponse>('/upload/audio', {
-      method: 'POST',
-      body: JSON.stringify({ name, dataUrl }),
-    }),
+  audio: (file: File, onProgress?: (percent: number) => void): Promise<UploadResponse> =>
+    uploadWithProgress('/upload/audio', file, onProgress),
 
-  cover: (name: string, dataUrl: string): Promise<UploadResponse> =>
-    request<UploadResponse>('/upload/cover', {
-      method: 'POST',
-      body: JSON.stringify({ name, dataUrl }),
-    }),
+  cover: (file: File, onProgress?: (percent: number) => void): Promise<UploadResponse> =>
+    uploadWithProgress('/upload/cover', file, onProgress),
 
   getAssetUrl: (id: string): string => `${API_BASE}/assets/${id}`,
+}
+
+function uploadWithProgress(
+  endpoint: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<UploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', file.name)
+
+    xhr.open('POST', `${API_BASE}${endpoint}`)
+    xhr.withCredentials = false
+
+    const token = getToken()
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    }
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+
+    xhr.onload = () => {
+      try {
+        const result = JSON.parse(xhr.responseText)
+        if (result.success) {
+          resolve(result)
+        } else {
+          reject(new Error(result.error || 'Upload failed'))
+        }
+      } catch {
+        reject(new Error('Invalid response'))
+      }
+    }
+
+    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.onabort = () => reject(new Error('Upload aborted'))
+
+    xhr.send(formData)
+  })
 }
 
 export const exportApi = {
@@ -397,14 +436,26 @@ export const exportApi = {
     return res.blob()
   },
 
-  import: (data: string): Promise<ChartResponse> =>
-    request<ChartResponse>('/export/', {
-      method: 'POST',
-      body: JSON.stringify({ data }),
-    }),
+  import: async (file: File): Promise<ChartResponse> => {
+    const token = getToken()
+    const formData = new FormData()
+    formData.append('file', file)
 
-  importChart: (data: string): Promise<ChartResponse> =>
-    exportApi.import(data),
+    const res = await fetch(`${API_BASE}/export/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+      },
+      body: formData,
+    })
+    const data = (await res.json()) as ChartResponse
+    if (!data.success) {
+      throw new Error((data as { error?: string }).error || 'Import failed')
+    }
+    return data
+  },
+
+  importChart: (file: File): Promise<ChartResponse> => exportApi.import(file),
 }
 
 export interface HealthResponse {

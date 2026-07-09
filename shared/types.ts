@@ -208,8 +208,8 @@ export interface UploadedAsset {
   name: string
   mimeType: string
   size: number
-  /** base64 data URL */
-  dataUrl: string
+  /** File path on disk (relative to data/assets/) */
+  filePath: string
   md5: string
 }
 

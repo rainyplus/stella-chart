@@ -55,6 +55,7 @@ export default function Home() {
   const [showImportProgress, setShowImportProgress] = useState(false)
   const [importProgress, setImportProgress] = useState(0)
   const [importStep, setImportStep] = useState('')
+  const [importError, setImportError] = useState('')
   const [showTutorial, setShowTutorial] = useState(false)
   const [maintenanceStatus, setMaintenanceStatus] = useState<MaintenanceStatus | null>(null)
   const [checkingMaintenance, setCheckingMaintenance] = useState(true)
@@ -239,18 +240,15 @@ export default function Home() {
     setShowCopyrightModal(false)
     setAudioName(pendingAudioFile.name)
     setCopyrightAgreed(true)
-    const reader = new FileReader()
-    reader.onload = async () => {
-      try {
-        const dataUrl = reader.result as string
-        const res = await uploadApi.audio(pendingAudioFile.name, dataUrl)
-        setAudioUrl(res.url)
-        setAudioMd5(res.md5)
-      } catch (err: unknown) {
-        setCreateError(err instanceof Error ? err.message : '音频上传失败')
-      }
+    try {
+      const res = await uploadApi.audio(pendingAudioFile, (percent) => {
+        console.log('上传进度:', percent + '%')
+      })
+      setAudioUrl(res.url)
+      setAudioMd5(res.md5)
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : '音频上传失败')
     }
-    reader.readAsDataURL(pendingAudioFile)
     setPendingAudioFile(null)
   }
 
@@ -263,17 +261,13 @@ export default function Home() {
     const file = e.target.files?.[0]
     if (!file) return
     setCoverName(file.name)
-    const reader = new FileReader()
-    reader.onload = async () => {
-      try {
-        const dataUrl = reader.result as string
-        const res = await uploadApi.cover(file.name, dataUrl)
-        setCoverUrl(res.url)
-      } catch (err: unknown) {
-        setCreateError(err instanceof Error ? err.message : '封面上传失败')
-      }
+    try {
+      const res = await uploadApi.cover(file)
+      setCoverUrl(res.url)
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : '封面上传失败')
     }
-    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   const createChart = async () => {
@@ -323,13 +317,12 @@ export default function Home() {
 
     setShowImportProgress(true)
     setImportProgress(0)
-    setImportStep('读取文件中...')
+    setImportStep('上传文件中...')
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 150))
       setImportProgress(20)
 
-      const text = await file.text()
       setImportStep('解析数据中...')
       setImportProgress(40)
 
@@ -337,7 +330,7 @@ export default function Home() {
       setImportStep('验证数据中...')
       setImportProgress(60)
 
-      const { chart } = await exportApi.importChart(text)
+      const { chart } = await exportApi.importChart(file)
       setImportStep('加载音频中...')
       setImportProgress(80)
 
@@ -349,8 +342,10 @@ export default function Home() {
       navigate(`/editor/${chart.id}`)
     } catch (err: unknown) {
       console.error(err)
+      setImportError(err instanceof Error ? err.message : '导入失败')
       setShowImportProgress(false)
     }
+    e.target.value = ''
   }
 
   if (isLoading || !user || checkingMaintenance) return null
