@@ -12,8 +12,26 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data')
 
+console.log('[Data] DATA_DIR =', DATA_DIR)
+
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true })
+  console.log('[Data] Creating data directory...')
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    console.log('[Data] Data directory created successfully')
+  } catch (err) {
+    console.error('[Data] Failed to create data directory:', err)
+  }
+} else {
+  console.log('[Data] Data directory exists')
+  try {
+    const testFile = path.join(DATA_DIR, '.write-test')
+    fs.writeFileSync(testFile, 'test')
+    fs.unlinkSync(testFile)
+    console.log('[Data] Data directory is writable')
+  } catch (err) {
+    console.error('[Data] Data directory is NOT writable:', err)
+  }
 }
 
 function loadMap<T>(filename: string): Map<string, T> {
