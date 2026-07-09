@@ -56,6 +56,8 @@ export default function Home() {
   const [importProgress, setImportProgress] = useState(0)
   const [importStep, setImportStep] = useState('')
   const [importError, setImportError] = useState('')
+  const [audioUploadProgress, setAudioUploadProgress] = useState(0)
+  const [isAudioUploading, setIsAudioUploading] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [maintenanceStatus, setMaintenanceStatus] = useState<MaintenanceStatus | null>(null)
   const [checkingMaintenance, setCheckingMaintenance] = useState(true)
@@ -222,6 +224,21 @@ export default function Home() {
 
   const handleCreateChart = useCallback(() => {
     if (!checkCanEnterEditor()) return
+    setSongName('')
+    setArtist('')
+    setCharter('')
+    setBpm(120)
+    setDifficulty(5)
+    setOffset(0)
+    setAudioUrl('')
+    setAudioMd5('')
+    setAudioName('')
+    setCoverUrl('')
+    setCoverName('')
+    setCreateError('')
+    setCopyrightAgreed(false)
+    setIsAudioUploading(false)
+    setAudioUploadProgress(0)
     setShowCreate(true)
   }, [checkCanEnterEditor])
 
@@ -240,14 +257,21 @@ export default function Home() {
     setShowCopyrightModal(false)
     setAudioName(pendingAudioFile.name)
     setCopyrightAgreed(true)
+    setIsAudioUploading(true)
+    setAudioUploadProgress(0)
     try {
       const res = await uploadApi.audio(pendingAudioFile, (percent) => {
-        console.log('上传进度:', percent + '%')
+        setAudioUploadProgress(percent)
       })
       setAudioUrl(res.url)
       setAudioMd5(res.md5)
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : '音频上传失败')
+      setAudioName('')
+      setCopyrightAgreed(false)
+    } finally {
+      setIsAudioUploading(false)
+      setAudioUploadProgress(0)
     }
     setPendingAudioFile(null)
   }
@@ -276,7 +300,11 @@ export default function Home() {
       setCreateError('请填写歌曲名')
       return
     }
-    if (audioUrl && !copyrightAgreed) {
+    if (!audioUrl) {
+      setCreateError('请上传音频文件')
+      return
+    }
+    if (!copyrightAgreed) {
       setCreateError('请确认上传的音乐已获得合法授权')
       return
     }
@@ -652,17 +680,34 @@ export default function Home() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">音频文件</label>
-                      <label className={`flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed rounded-xl cursor-pointer text-sm transition-colors ${
-                        audioUrl
-                          ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-500'
-                      }`}>
-                        <Music className="w-5 h-5" />
-                        <span className="truncate flex-1 text-center">{audioName || '上传音频'}</span>
-                        {audioUrl && <Check className="w-5 h-5" />}
-                        <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} />
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                        音频文件
+                        <span className="text-red-500 ml-1">*</span>
                       </label>
+                      <div className="relative">
+                        <label className={`flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed rounded-xl cursor-pointer text-sm transition-colors ${
+                          isAudioUploading
+                            ? 'bg-brand-50 dark:bg-brand-900/20 border-brand-300 dark:border-brand-700 text-brand-600 dark:text-brand-400'
+                            : audioUrl
+                              ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-500'
+                        } ${isAudioUploading ? 'pointer-events-none' : ''}`}>
+                          <Music className="w-5 h-5" />
+                          <span className="truncate flex-1 text-center">
+                            {isAudioUploading ? `上传中 ${audioUploadProgress}%` : audioName || '上传音频'}
+                          </span>
+                          {audioUrl && !isAudioUploading && <Check className="w-5 h-5" />}
+                          <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} disabled={isAudioUploading} />
+                        </label>
+                        {isAudioUploading && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 dark:bg-slate-700 rounded-b-xl overflow-hidden">
+                            <div
+                              className="h-full bg-brand-500 transition-all duration-200"
+                              style={{ width: `${audioUploadProgress}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">封面图片</label>
@@ -736,10 +781,10 @@ export default function Home() {
                 </button>
                 <button
                   onClick={createChart}
-                  disabled={audioUrl && !copyrightAgreed}
+                  disabled={!audioUrl || !copyrightAgreed || isAudioUploading}
                   className="btn-primary"
                 >
-                  创建并编辑
+                  {isAudioUploading ? `上传中 ${audioUploadProgress}%` : '创建并编辑'}
                 </button>
               </div>
             </div>
