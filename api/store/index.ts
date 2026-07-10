@@ -136,4 +136,50 @@ export function updateMaintenance(status: MaintenanceStatus): void {
   setupAutoOpenServer()
 }
 
+export function reloadAll(): void {
+  console.log('[Data] Reloading all data from disk...')
+  
+  const newUsers = loadMap<User>('users.json')
+  const newUsersByUsername = loadMap<string>('usersByUsername.json')
+  const newUsersByEmail = loadMap<string>('usersByEmail.json')
+  const newInviteCodes = loadMap<InviteCode>('inviteCodes.json')
+  const newCharts = loadMap<ChartData>('charts.json')
+  const newAssets = loadMap<UploadedAsset>('assets.json')
+  const newAnnouncements = loadMap<Announcement>('announcements.json')
+  const newMaintenance = loadJson<MaintenanceStatus>('maintenance.json', defaultMaintenance)
+  
+  users.clear()
+  for (const [k, v] of newUsers) users.set(k, v)
+  
+  usersByUsername.clear()
+  for (const [k, v] of newUsersByUsername) usersByUsername.set(k, v)
+  
+  usersByEmail.clear()
+  for (const [k, v] of newUsersByEmail) usersByEmail.set(k, v)
+  
+  inviteCodes.clear()
+  for (const [k, v] of newInviteCodes) inviteCodes.set(k, v)
+  
+  charts.clear()
+  for (const [k, v] of newCharts) charts.set(k, v)
+  
+  assets.clear()
+  for (const [k, v] of newAssets) assets.set(k, v)
+  
+  announcements.clear()
+  for (const [k, v] of newAnnouncements) announcements.set(k, v)
+  
+  maintenance = newMaintenance
+  
+  setupAutoOpenServer()
+  
+  console.log('[Data] Reload complete')
+  console.log(`  Users: ${users.size}`)
+  console.log(`  Charts: ${charts.size}`)
+  console.log(`  Assets: ${assets.size}`)
+  console.log(`  Invite codes: ${inviteCodes.size}`)
+  console.log(`  Announcements: ${announcements.size}`)
+  console.log(`  Maintenance: ${maintenance.isMaintenance ? 'ON' : 'OFF'}`)
+}
+
 setupAutoOpenServer()

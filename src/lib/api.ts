@@ -278,11 +278,45 @@ export const adminApi = {
     return res.blob()
   },
 
-  restoreBackup: (backupData: string): Promise<{ success: boolean; message?: string }> =>
-    request<{ success: boolean; message?: string }>('/admin/backup/restore', {
-      method: 'POST',
-      body: JSON.stringify({ backupData }),
-    }),
+  restoreBackup: (file: File, onProgress?: (percent: number) => void): Promise<{ success: boolean; message?: string }> => {
+    return new Promise((resolve, reject) => {
+      const token = getToken()
+      const xhr = new XMLHttpRequest()
+      const formData = new FormData()
+      formData.append('file', file)
+
+      xhr.open('POST', `${API_BASE}/admin/backup/restore`)
+      xhr.withCredentials = false
+
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      }
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+      }
+
+      xhr.onload = () => {
+        try {
+          const result = JSON.parse(xhr.responseText)
+          if (result.success) {
+            resolve(result)
+          } else {
+            reject(new Error(result.error || '恢复备份失败'))
+          }
+        } catch {
+          reject(new Error('无效的响应'))
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('网络错误'))
+      xhr.onabort = () => reject(new Error('上传已取消'))
+
+      xhr.send(formData)
+    })
+  },
 }
 
 export interface MaintenanceStatusResponse {

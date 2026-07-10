@@ -41,8 +41,10 @@ export default function AdminDashboard() {
   const [maintenanceError, setMaintenanceError] = useState('')
   const [backupLoading, setBackupLoading] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
+  const [restoreProgress, setRestoreProgress] = useState(0)
   const [restoreSuccess, setRestoreSuccess] = useState('')
   const [restoreError, setRestoreError] = useState('')
+  const [restoreCountdown, setRestoreCountdown] = useState(0)
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -181,16 +183,34 @@ export default function AdminDashboard() {
     setRestoreLoading(true)
     setRestoreError('')
     setRestoreSuccess('')
+    setRestoreProgress(0)
     
     try {
-      const text = await file.text()
-      const confirmed = window.confirm('确定要恢复数据吗？这将覆盖当前所有数据，服务器将自动重启。')
+      const confirmed = window.confirm('确定要恢复数据吗？这将覆盖当前所有数据，操作不可撤销！')
       if (!confirmed) {
         e.target.value = ''
+        setRestoreLoading(false)
         return
       }
-      await adminApi.restoreBackup(text)
-      setRestoreSuccess('数据恢复成功，服务器正在重启...')
+      
+      const result = await adminApi.restoreBackup(file, (percent) => {
+        setRestoreProgress(percent)
+      })
+      
+      setRestoreSuccess(result.message || '数据恢复成功！')
+      setRestoreCountdown(5)
+      
+      const timer = setInterval(() => {
+        setRestoreCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            window.location.reload()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      
     } catch (err: unknown) {
       setRestoreError(err instanceof Error ? err.message : '恢复备份失败')
     } finally {
@@ -527,6 +547,21 @@ export default function AdminDashboard() {
                 </label>
               </div>
 
+              {restoreLoading && (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-600 dark:text-slate-300 flex justify-between">
+                    <span>上传恢复数据中...</span>
+                    <span>{restoreProgress}%</span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 transition-all duration-200 rounded-full"
+                      style={{ width: `${restoreProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {restoreError && (
                 <div className="text-sm text-red-500 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/50 rounded-xl">
                   {restoreError}
@@ -534,7 +569,12 @@ export default function AdminDashboard() {
               )}
               {restoreSuccess && (
                 <div className="text-sm text-emerald-500 p-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
-                  {restoreSuccess}
+                  <p>{restoreSuccess}</p>
+                  {restoreCountdown > 0 && (
+                    <p className="mt-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                      {restoreCountdown} 秒后页面将自动刷新...
+                    </p>
+                  )}
                 </div>
               )}
 
