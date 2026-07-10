@@ -404,7 +404,7 @@ export default function Timeline({ onSeek, waveformPeaks = [], audioDuration = 0
                   />
                   {mark.label && (
                     <span
-                      className={`text-[10px] font-mono ml-1 -translate-y-0.5 ${
+                      className={`text-[10px] font-mono ml-1 -translate-y-0.5 select-none pointer-events-none ${
                         mark.type === 'measure' ? 'text-indigo-300' : 'text-zinc-500'
                       }`}
                     >

@@ -247,22 +247,43 @@ export function useAudioEngine(
     async (ctx: AudioContext, arrayBuffer: ArrayBuffer, signal: { cancelled: boolean }): Promise<AudioBuffer> => {
       return await new Promise<AudioBuffer>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
-          reject(new Error('音频解码超时，请转码为MP3'))
+          reject(new Error('音频解码超时，请转码为MP3格式后重试'))
         }, DECODE_TIMEOUT)
 
-        ctx.decodeAudioData(arrayBuffer)
-          .then((buffer) => {
-            clearTimeout(timeoutId)
-            if (signal.cancelled) {
-              reject(new Error('Cancelled'))
-              return
+        const tryDecode = async () => {
+          try {
+            if (ctx.decodeAudioData.length === 2) {
+              ctx.decodeAudioData(
+                arrayBuffer.slice(0),
+                (buffer) => {
+                  clearTimeout(timeoutId)
+                  if (signal.cancelled) {
+                    reject(new Error('Cancelled'))
+                    return
+                  }
+                  resolve(buffer)
+                },
+                (err) => {
+                  clearTimeout(timeoutId)
+                  reject(new Error(`音频解码失败：${err instanceof Error ? err.message : '未知错误'}，请转码为MP3格式`))
+                },
+              )
+            } else {
+              const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+              clearTimeout(timeoutId)
+              if (signal.cancelled) {
+                reject(new Error('Cancelled'))
+                return
+              }
+              resolve(buffer)
             }
-            resolve(buffer)
-          })
-          .catch((err) => {
+          } catch (err) {
             clearTimeout(timeoutId)
-            reject(err)
-          })
+            reject(new Error(`音频解码失败：${err instanceof Error ? err.message : '未知错误'}，请转码为MP3格式`))
+          }
+        }
+
+        tryDecode()
       })
     },
     [],

@@ -17,6 +17,8 @@ export const CAMERA_PRESETS: { id: CameraPreset; label: string }[] = [
 ]
 export type SnapDivision = 4 | 8 | 16
 
+export const MAX_HISTORY = 50
+
 export interface HistoryEntry {
   chart: ChartData
   label: string
@@ -49,6 +51,8 @@ export interface EditorState {
   loadChart: (chart: ChartData) => void
   setChart: (chart: ChartData) => void
   saveState: (label?: string) => void
+  saveStateDebounced: (label?: string) => void
+  flushDebouncedState: () => void
   undo: () => void
   redo: () => void
   jumpToHistory: (index: number) => void
@@ -203,7 +207,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       label,
       timestamp: Date.now(),
     }
-    set({ undoStack: [...undoStack, entry], redoStack: [] })
+    const newStack = [...undoStack, entry]
+    if (newStack.length > MAX_HISTORY) {
+      newStack.splice(0, newStack.length - MAX_HISTORY)
+    }
+    set({ undoStack: newStack, redoStack: [] })
+  },
+
+  saveStateDebounced: (() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let pendingLabel = '操作'
+    return function (this: unknown, label = '操作') {
+      pendingLabel = label
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      timeoutId = setTimeout(() => {
+        timeoutId = null
+        const { chart, undoStack } = get()
+        if (!chart) return
+        const entry: HistoryEntry = {
+          chart: clone(chart),
+          label: pendingLabel,
+          timestamp: Date.now(),
+        }
+        const newStack = [...undoStack, entry]
+        if (newStack.length > MAX_HISTORY) {
+          newStack.splice(0, newStack.length - MAX_HISTORY)
+        }
+        set({ undoStack: newStack, redoStack: [] })
+      }, 300)
+    }
+  })(),
+
+  flushDebouncedState: () => {
+    // 防抖定时器由 saveStateDebounced 内部管理
   },
 
   undo: () => {
@@ -301,7 +339,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateJudgeBox: (id, patch) => {
-    const { chart, currentSceneId, saveState } = get()
+    const { chart, currentSceneId, saveStateDebounced } = get()
     if (!chart || !currentSceneId) return
     const scene = chart.scenes.find((s) => s.id === currentSceneId)
     if (!scene) return
@@ -316,7 +354,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const dx = newPos.x - oldBox.position.x
     const dy = newPos.y - oldBox.position.y
     const dz = newPos.z - oldBox.position.z
-    saveState('更新判定框')
+    saveStateDebounced('移动判定框')
     const updated = {
       ...chart,
       scenes: chart.scenes.map((s) =>
@@ -479,9 +517,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const scene = chart.scenes.find((s) => s.id === currentSceneId)
     if (!scene) return
     const TIME_THRESHOLD = 0.01
-    const POS_THRESHOLD = 0.1
+    const POS_THRESHOLD = 0.5
     const isDuplicate = scene.notes.some((n) => {
-      if (n.type !== note.type) return false
       if (n.judgeBoxId !== note.judgeBoxId) return false
       if (Math.abs(n.hitTime - note.hitTime) > TIME_THRESHOLD) return false
       const dx = n.position.x - note.position.x
@@ -545,9 +582,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   moveSelectedNotes: (delta) => {
-    const { chart, currentSceneId, selectedNoteIds, saveState } = get()
+    const { chart, currentSceneId, selectedNoteIds, saveStateDebounced } = get()
     if (!chart || !currentSceneId || selectedNoteIds.length === 0) return
-    saveState(`移动${selectedNoteIds.length}个音符`)
+    saveStateDebounced(`移动${selectedNoteIds.length}个音符`)
     const updated = {
       ...chart,
       scenes: chart.scenes.map((s) =>

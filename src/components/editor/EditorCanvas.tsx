@@ -477,9 +477,11 @@ const SpawnLines = memo(function SpawnLines({ center, distance, isDark }: { cent
 const BeatGridRings = memo(function BeatGridRings({ center, snap, isDark }: { center: V3; snap: number; isDark: boolean }) {
   const rings = useMemo(() => {
     const result = []
-    for (let i = 1; i <= 8; i++) {
-      const r = i * 2
-      const isMain = i % (snap / 4) === 0
+    const ringStep = 8 / snap
+    const totalRings = Math.floor(16 / ringStep)
+    for (let i = 1; i <= totalRings; i++) {
+      const r = i * ringStep
+      const isMain = i % 4 === 0
       const color = isDark
         ? (isMain ? '#475569' : '#334155')
         : (isMain ? '#94a3b8' : '#cbd5e1')
@@ -500,17 +502,25 @@ function getNoteWorldPosition(note: NoteData, judgeBox: JudgeBox, songTime: numb
   const ap = note.approachTime ?? approachTime(difficulty)
   const t = (note.hitTime - songTime) / ap
   const clampedT = Math.max(0, Math.min(1, 1 - t))
+  const dx = note.position.x - judgeBox.position.x
+  const dy = note.position.y - judgeBox.position.y
+  const dz = note.position.z - judgeBox.position.z
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  const extendFactor = dist > 0 ? (judgeBox.spawnDistance + 10) / dist : 1
+  const startX = judgeBox.position.x + dx * extendFactor
+  const startY = judgeBox.position.y + dy * extendFactor
+  const startZ = judgeBox.position.z + dz * extendFactor
   return [
-    lerp(note.position.x, judgeBox.position.x, clampedT),
-    lerp(note.position.y, judgeBox.position.y, clampedT),
-    lerp(note.position.z, judgeBox.position.z, clampedT),
+    lerp(startX, judgeBox.position.x, clampedT),
+    lerp(startY, judgeBox.position.y, clampedT),
+    lerp(startZ, judgeBox.position.z, clampedT),
   ]
 }
 
 function isNoteVisible(note: NoteData, songTime: number, difficulty: number): boolean {
   const ap = note.approachTime ?? approachTime(difficulty)
   const t = (note.hitTime - songTime) / ap
-  return t >= -0.2 && t <= 1.2
+  return t >= -0.5 && t <= 1.2
 }
 
 const TapNoteMesh = memo(function TapNoteMesh({
@@ -823,6 +833,7 @@ function InteractionHandler({
   setSelectionBox: (box: SelectionBox | null) => void
 }) {
   const { camera, gl } = useThree()
+  const snap = useEditorStore((s) => s.snap)
   const raycaster = useRef(new THREE.Raycaster())
   const plane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), -judgeBox.position.y))
   const dragRef = useRef<
@@ -865,7 +876,7 @@ function InteractionHandler({
     return null
   }, [camera, getPointerNDC])
 
-  const snapToSpawnLine = useCallback((groundPoint: V3): V3 => {
+  const snapToGrid = useCallback((groundPoint: V3): V3 => {
     const dx = groundPoint.x - judgeBox.position.x
     const dz = groundPoint.z - judgeBox.position.z
     const absX = Math.abs(dx)
@@ -880,12 +891,17 @@ function InteractionHandler({
       dirZ = dz > 0 ? 1 : -1
     }
 
+    const distance = Math.sqrt(dx * dx + dz * dz)
+    const ringStep = 8 / snap
+    const ringIndex = Math.max(1, Math.round(distance / ringStep))
+    const snappedDistance = ringIndex * ringStep
+
     return {
-      x: judgeBox.position.x + dirX * judgeBox.spawnDistance,
+      x: judgeBox.position.x + dirX * snappedDistance,
       y: judgeBox.position.y,
-      z: judgeBox.position.z + dirZ * judgeBox.spawnDistance,
+      z: judgeBox.position.z + dirZ * snappedDistance,
     }
-  }, [judgeBox.position, judgeBox.spawnDistance])
+  }, [judgeBox.position, snap])
 
   const projectNoteToScreen = useCallback((note: NoteData) => {
     const state = useEditorStore.getState()
@@ -924,7 +940,7 @@ function InteractionHandler({
       return
     }
 
-    const position = snapToSpawnLine(groundPoint)
+    const position = snapToGrid(groundPoint)
     const ap = approachTime(chart.difficulty)
 
     if (state.tool === 'tap' || state.tool === 'catch' || state.tool === 'kick') {
@@ -1014,7 +1030,7 @@ function InteractionHandler({
 
     window.addEventListener('pointermove', handleWindowMove)
     window.addEventListener('pointerup', handleWindowUp)
-  }, [chart, getCanvasOffset, raycastGround, scene.notes, setSelectionBox, snapToSpawnLine, projectNoteToScreen])
+  }, [chart, getCanvasOffset, raycastGround, scene.notes, setSelectionBox, snapToGrid, projectNoteToScreen])
 
   return (
     <mesh
